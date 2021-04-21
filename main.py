@@ -1,5 +1,5 @@
 """
-Cloned from: https://github.com/yolish/transposenet and modified for testing smooth camera pose regression
+Cloned from: https://github.com/yolish/transposenet and modified for training/testing spectral RPR 
 Entry point training and testing
 """
 
