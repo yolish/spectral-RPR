@@ -23,7 +23,8 @@ class KRPRDataset(Dataset):
         :return: an instance of the class
         """
         # compute k-nearest neighbors by pos
-        self.img_paths, self.poses = read_labels_file(labels_file, dataset_path)
+        super(KRPRDataset, self).__init__()
+        self.img_paths, self.poses, _, _ = read_labels_file(labels_file, dataset_path)
         self.k = k
         n = len(self.img_paths)
         self.knn = [None] * n
@@ -33,12 +34,15 @@ class KRPRDataset(Dataset):
                                                            dataset_embedding, n)[1:(self.k+1)]
         self.transform = data_transform
 
+    def __len__(self):
+        return len(self.img_paths)
+
     def __getitem__(self, idx):
         # Load query and its pose
-        img = imread(self.paths[idx])
+        img = imread(self.img_paths[idx])
         if self.transform:
             img = self.transform(img)
-        pose = self.poses[idx].tovector()
+        pose = self.poses[idx]
 
         # Load image of k nearest neighbors and their poses
         knn_indices = self.knn[idx]
@@ -46,16 +50,18 @@ class KRPRDataset(Dataset):
         # K X 7 with relative poses from knn to query
         knn_query_rel_poses = np.zeros((self.k, 7))
         for i, knn_index in enumerate(knn_indices):
-            knn_imgs.append(imread(self.paths[knn_index]))
-            knn_query_rel_poses[i, :] = rel_pose(self.poses[knn_index], self.poses[idx])
+            knn_imgs.append(imread(self.img_paths[knn_index]))
+            delta_t, delta_quat = rel_pose(self.poses[knn_index], self.poses[idx])
+            knn_query_rel_poses[i, :3] = delta_t
+            knn_query_rel_poses[i, 3:] = delta_quat
             if self.transform:
-                knn_imgs[i] = self.transform(knn_imgs[knn_index])
+                knn_imgs[i] = self.transform(knn_imgs[i])
 
         # K X K  X 7 matrix with relative poses between knn
         knn_rel_poses = build_rel_matrix(self.poses, knn_indices, self.k)
 
         sample = {'img': img, 'pose': pose,
-                  'knn_imgs': knn_imgs,
+                  'knn_imgs': torch.stack(knn_imgs),
                   'knn_query_rel_poses': knn_query_rel_poses, 'knn_rel_poses': knn_rel_poses}
         return sample
 
