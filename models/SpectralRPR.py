@@ -8,7 +8,7 @@ class Backbone(nn.Module):
     def __init__(self, config):
         super(Backbone, self).__init__()
         self.output_dim = 1280 # EfficientNet
-        self.backbone = torch.load(config.pretrained_path)
+        self.backbone = torch.load(config["backbone"])
         self.avg_pooling_2d = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, img):
@@ -32,7 +32,7 @@ class PoseRegressor(nn.Module):
         output_dim: (int) the outpur dimension
         use_prior: (bool) whether to use prior information
         """
-        super().__init__()
+        super(PoseRegressor, self).__init__()
         ch = 1024
         self.fc_h = nn.Linear(input_dim, ch)
         self.fc_o = nn.Linear(ch, output_dim)
@@ -56,15 +56,16 @@ class SpectralRPR(nn.Module):
     A Relative Pose Regressor with Spectral Synchornization for Absolute Pose Estimation
     """
     def __init__(self, config):
+        super(SpectralRPR, self).__init__()
         self.backbone = Backbone(config)
-        self.regressor_t = PoseRegressor(self.backbone.output_dim, 3)
-        self.regressor_rot = PoseRegressor(self.backbone.output_dim, 4)
+        self.regressor_t = PoseRegressor(self.backbone.output_dim*2, 3)
+        self.regressor_rot = PoseRegressor(self.backbone.output_dim*2, 4)
 
     def forward_backbone(self, img):
         return self.backbone(img)
 
     def forward_regressor_heads(self, latent_query, latent_knns):
-        latent_pairs = torch.cat((latent_query, latent_knns), 0)
+        latent_pairs = torch.cat((latent_query, latent_knns), 1)
         rel_ts = self.regressor_t(latent_pairs)
         rel_rots = self.regressor_rot(latent_pairs)
         return rel_ts, rel_rots
@@ -76,28 +77,33 @@ class SpectralRPR(nn.Module):
         return abs_t, abs_rot
 
     def forward(self, data):
-        query = data['img']
-        knns = data['knn_imgs']
-        batch_size = query.shape[0]
-        k = knns.shape[1]
+        query = data['img'] # N x C X H X W
+        knns = data['knn_imgs'] # N x K X C X H X W
+        batch_size = query.shape[0] # N
+        k = knns.shape[1] # K
 
-        knns = knns.view(batch_size*k, knns.shape[2])
+        # N x K X C X H X W ==> N*K X C X H W
+        knns = knns.view(batch_size*k, *knns.shape[2:])
 
+        #### This can be replaced later with a Transformer-based architecture
         # Compute latent representations of query and KNNs
-        latent_query = self.forward_backbone(query)
-        latent_knns = self.forward_backbone(knns)
+        latent_query = self.forward_backbone(query) # N X H (H = latent backbone dimension)
+        latent_knns = self.forward_backbone(knns) # N*K x H
 
         # Regress relative poses between query and knns
-        rel_query_ts, rel_query_rots = self.forward_regressor_heads(latent_query.repeat((latent_knns.shape[0], 1)), latent_knns)
+        # N*K X H (repeat each query for K times)
+        latent_query = latent_query.repeat(1, k).reshape(batch_size*k, latent_query.shape[1])
+        rel_query_ts, rel_query_rots = self.forward_regressor_heads(latent_query, latent_knns)
+        ###########################3###################
 
         # Apply spectral synchornization
-        rel_knn_poses = data['rel_knn_poses']
+        rel_knn_poses = data['knn_rel_poses']
         rel_knn_ts = rel_knn_poses[:, :, :, :3]
         rel_knn_rots = rel_knn_poses[:, :, :, 3:]
-        abs_t, abs_rot = self.foward_spectral(rel_knn_ts, rel_knn_rots, rel_query_ts, rel_query_rots)
+        abs_t, abs_rot = self.forward_spectral(rel_knn_ts, rel_knn_rots, rel_query_ts, rel_query_rots, batch_size)
 
         res = {"abs_poses": torch.cat((abs_t, abs_rot), dim=1),
-               "rel_poses": torch.cat((rel_query_ts, rel_query_rots), dim=2)}
+               "rel_poses": torch.cat((rel_query_ts, rel_query_rots), dim=1)}
         return res
 
 
