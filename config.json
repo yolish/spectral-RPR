@@ -5,12 +5,13 @@
 		"n_workers": 4,
 		"device_id": "cuda:0"
 	},
-	"spectral_rpr": {
-		"batch_size": 32,
+	"spectral-rpr": {
+		"batch_size": 4,
 		"learnable": true,
 		"s_x": -3,
 		"s_q": -6.5,
 		"norm": 2,
+		"k": 10,
 		"lr": 1e-4,
 		"weight_decay": 1e-5,
 		"eps": 1e-10,
