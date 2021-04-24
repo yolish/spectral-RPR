@@ -15,7 +15,7 @@ class ExtendedCameraPoseLoss(nn.Module):
         """
         super(ExtendedCameraPoseLoss, self).__init__()
         self.camera_pose_loss = CameraPoseLoss(config)
-        self.w = torch.nn.Parameter(torch.Tensor([config.get(0.5)]), requires_grad=True)
+        self.w = torch.nn.Parameter(torch.Tensor([0.5]), requires_grad=True)
 
     def forward(self, est_abs_poses, gt_abs_poses, est_rel_poses, gt_rel_poses, ):
         """
