@@ -58,9 +58,10 @@ def train(model, config, device, dataset_path, labels_file, embedding_path):
         for batch_idx, minibatch in enumerate(dataloader):
             for key, value in minibatch.items():
                 minibatch[key] = value.to(device)
+
             gt_abs_poses = minibatch.get('pose').to(dtype=torch.float32)
             batch_size = gt_abs_poses.shape[0]
-            gt_rel_poses = minibatch.get('rel_query_knn_poses').to(dtype=torch.float32)
+            gt_rel_poses = minibatch.get('knn_query_rel_poses').to(dtype=torch.float32)
             gt_rel_poses = gt_rel_poses.view(batch_size*k, gt_rel_poses.shape[2])
 
             n_samples += batch_size
