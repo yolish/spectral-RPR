@@ -1,5 +1,5 @@
 """
-Cloned from: https://github.com/yolish/transposenet and modified for training/testing spectral RPR 
+Cloned from: https://github.com/yolish/transposenet and modified for testing smooth camera pose regression
 Entry point training and testing
 """
 
@@ -21,9 +21,10 @@ if __name__ == "__main__":
     arg_parser.add_argument("backbone_path", help="path to backbone .pth - e.g. efficientnet")
     arg_parser.add_argument("dataset_path", help="path to the physical location of the dataset")
     arg_parser.add_argument("train_labels_file", help="path to a file mapping images to their poses for the train dataset")
+    arg_parser.add_argument("train_dataset_embedding_path",
+                            help="path to a file with the embedding of the train dataset embedding")
     arg_parser.add_argument("--test_labels_file",
                             help="path to a file mapping images to their poses for the test dataset")
-    arg_parser.add_argument("train_dataset_embedding_path", help="path to a file with the embedding of the train dataset embedding")
     arg_parser.add_argument("--checkpoint_path",
                             help="path to a pre-trained model (should match the model indicated in model_name")
     arg_parser.add_argument("--experiment", help="a short string to describe the experiment/commit used")
@@ -36,7 +37,6 @@ if __name__ == "__main__":
     if args.experiment is not None:
         logging.info("Experiment details: {}".format(args.experiment))
     logging.info("Using dataset: {}".format(args.dataset_path))
-    logging.info("Using labels file: {}".format(args.labels_file))
 
     # Read configuration
     with open('config.json', "r") as read_file:
