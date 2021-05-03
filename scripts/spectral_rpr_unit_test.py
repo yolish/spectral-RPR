@@ -12,7 +12,6 @@ from util.spectral_sync import SpectralSync
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('input_file', help='Path to the dataset file')
-    arg_parser.add_argument('data_path', help='Path to the dataset location')
     arg_parser.add_argument('num_of_rel_imgs', help='The number of images to use in the Spectral Relative Pose estimator',
                             type=int, default=2)
     arg_parser.add_argument('--noise_level', help='The level of location uncertainty', type=float, default=0.0)
