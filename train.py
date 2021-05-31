@@ -2,7 +2,7 @@ import torch
 from datasets.KRPRDataset import KRPRDataset
 from util import utils
 from os.path import join
-from models.pose_losses import ExtendedCameraPoseLoss
+from models.pose_losses import ExtendedCameraPoseLoss, CameraPoseLoss
 import logging
 
 
@@ -18,7 +18,11 @@ def train(model, config, device, dataset_path, labels_file, embedding_path):
 
     # Set to train mode
     model.train()
-    pose_loss = ExtendedCameraPoseLoss(config).to(device)
+    apply_spectral = config.get("apply_spectral")
+    if apply_spectral:
+        pose_loss = ExtendedCameraPoseLoss(config).to(device)
+    else:
+        pose_loss = CameraPoseLoss(config).to(device)
 
     # Set the optimizer and scheduler
     params = list(model.parameters()) + list(pose_loss.parameters())
@@ -71,11 +75,14 @@ def train(model, config, device, dataset_path, labels_file, embedding_path):
             optim.zero_grad()
 
             # Forward pass
-            res = model(minibatch)
+            res = model(minibatch, apply_spectral)
             est_abs_poses = res.get('abs_poses')
             est_rel_poses = res.get('rel_poses')
 
-            criterion = pose_loss(est_abs_poses, gt_abs_poses, est_rel_poses, gt_rel_poses)
+            if apply_spectral:
+                criterion = pose_loss(est_abs_poses, gt_abs_poses, est_rel_poses, gt_rel_poses)
+            else:
+                criterion = pose_loss(est_rel_poses, gt_rel_poses)
 
             # Collect for recoding and plotting
             running_loss += criterion.item()
@@ -88,13 +95,17 @@ def train(model, config, device, dataset_path, labels_file, embedding_path):
 
             # Record loss and performance on train set
             if batch_idx % n_freq_print == 0:
-                posit_err, orient_err = utils.pose_err(est_abs_poses.detach(), gt_abs_poses.detach())
+                if est_abs_poses is not None:
+                    posit_err, orient_err = utils.pose_err(est_abs_poses.detach(), gt_abs_poses.detach())
 
-                logging.info("[Batch-{}/Epoch-{}] running camera pose loss: {:.3f}, "
-                             "camera pose error: {:.2f}[m], {:.2f}[deg]".format(
-                                                                    batch_idx+1, epoch+1, (running_loss/n_samples),
-                                                                    posit_err.mean().item(),
-                                                                    orient_err.mean().item()))
+                    logging.info("[Batch-{}/Epoch-{}] running camera pose loss: {:.3f}, "
+                                 "camera pose error: {:.2f}[m], {:.2f}[deg]".format(
+                                                                        batch_idx+1, epoch+1, (running_loss/n_samples),
+                                                                        posit_err.mean().item(),
+                                                                        orient_err.mean().item()))
+                else:
+                    logging.info("[Batch-{}/Epoch-{}] running camera pose loss: {:.3f}".format(batch_idx+1, epoch+1, (running_loss/n_samples)))
+
         # Save checkpoint
         if (epoch % n_freq_checkpoint) == 0 and epoch > 0:
             torch.save(model.state_dict(), checkpoint_prefix + '_checkpoint-{}.pth'.format(epoch))
