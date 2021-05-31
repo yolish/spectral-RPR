@@ -21,8 +21,10 @@ if __name__ == "__main__":
     arg_parser.add_argument("backbone_path", help="path to backbone .pth - e.g. efficientnet")
     arg_parser.add_argument("dataset_path", help="path to the physical location of the dataset")
     arg_parser.add_argument("train_labels_file", help="path to a file mapping images to their poses for the train dataset")
-    arg_parser.add_argument("train_dataset_embedding_path",
-                            help="path to a file with the embedding of the train dataset embedding")
+    arg_parser.add_argument("--rpr_train_dataset_embedding_path",
+                            help="path to a file with the embedding of the train dataset embedding for RPR")
+    arg_parser.add_argument("--ir_train_dataset_embedding_path",
+                            help="path to a file with the embedding of the train dataset embedding for IR")
     arg_parser.add_argument("--test_labels_file",
                             help="path to a file mapping images to their poses for the test dataset")
     arg_parser.add_argument("--checkpoint_path",
@@ -69,9 +71,10 @@ if __name__ == "__main__":
         logging.info("Initializing from checkpoint: {}".format(args.checkpoint_path))
 
     if args.mode == 'train':
-        train(model, config, device, args.dataset_path, args.train_labels_file, args.train_dataset_embedding_path)
+        train(model, config, device, args.dataset_path, args.train_labels_file, args.ir_train_dataset_embedding_path)
     else: # Test
-        stats = test(model, config, device, args.dataset_path, args.train_labels_file, args.test_labels_file, args.train_dataset_embedding_path)
+        stats = test(model, config, device, args.dataset_path, args.train_labels_file, args.test_labels_file,
+                     args.rpr_train_dataset_embedding_path, args.ir_train_dataset_embedding_path)
         # Record overall statistics
         logging.info("Performance of {} on {}".format(args.checkpoint_path, args.test_labels_file))
         logging.info("Median pose error: {:.3f}[m], {:.3f}[deg]".format(np.median(stats[:, 0]), np.median(stats[:, 1])))
