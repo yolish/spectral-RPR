@@ -3,4 +3,5 @@ train
 models/backbones/efficient-net-b0.pth
 /mnt/data/CambridgeLandmarks/CAMBRIDGE_dataset/
 datasets/CambridgeLandmarks/abs_cambridge_pose_sorted.csv_ShopFacade_train.csv
+--ir_train_dataset_embedding_path
 datasets/CambridgeLandmarks/cambridge_four_scenes.csv_poselab_netvlad_embedding_ShopFacade.pth
