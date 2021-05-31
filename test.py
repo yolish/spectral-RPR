@@ -4,6 +4,7 @@ from util import utils
 import numpy as np
 import logging
 import time
+from util.spectral_sync_utils import calc_relative_poses, decompose_poses_with_exp
 
 
 def test(model, config, device, dataset_path, train_labels_file, test_labels_file, train_dataset_embedding_path):
@@ -40,6 +41,7 @@ def test(model, config, device, dataset_path, train_labels_file, test_labels_fil
             for key, value in minibatch.items():
                 minibatch[key] = value.to(device)
 
+            # TODO consider using NetVLAD for IR purposes
             # Forward pass to predict the pose
             tic = time.time()
             # embed the image
@@ -50,16 +52,21 @@ def test(model, config, device, dataset_path, train_labels_file, test_labels_fil
             latent_knns = train_dataset_embedding[knn_indices, :].unsqueeze(0)
 
             # Get relative poses from knns to query
-            rel_query_ts, rel_query_rots = model.forward_regressor_heads(latent_query.repeat((latent_knns.shape[0], 1)),
+            rel_query_ts, rel_query_quats = model.forward_regressor_heads(latent_query.repeat((latent_knns.shape[0], 1)),
                                                                         latent_knns)
 
+            #TODO add error of relative
+
             # Get relative poses
-            #TODO consider moving this outside and compute for the entire dataset
-            rel_knn_poses = utils.build_rel_matrix(train_poses, knn_indices, k)
-            rel_knn_poses = torch.Tensor(rel_knn_poses).unsqueeze(0).to(device)
-            rel_knn_ts = rel_knn_poses[:, :, :, :3]
-            rel_knn_rots = rel_knn_poses[:, :, :, 3:]
-            abs_t, abs_rot = model.foward_spectral(rel_knn_ts, rel_knn_rots, rel_query_ts, rel_query_rots)
+            knn_poses = train_poses[knn_indices, :]
+            knn_rel_exp_ts, knn_rel_rots = calc_relative_poses(knn_poses)
+
+            # Prepare GT abs t and R for finding the coefficients of the linear combination of the eigen vectors
+            exp_abs_knn_ts, abs_knn_rots = decompose_poses_with_exp(knn_poses)
+
+            abs_t, abs_rot = model.foward_spectral(knn_rel_exp_ts, knn_rel_rots,
+                                                exp_abs_knn_ts, abs_knn_rots,
+                                                rel_query_ts, rel_query_quats)
 
             # get absolute pose using spectral analysis
             est_pose = torch.cat((abs_t, abs_rot), dim=1)

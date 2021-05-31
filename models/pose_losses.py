@@ -26,10 +26,12 @@ class ExtendedCameraPoseLoss(nn.Module):
         :param gt_rel_poses: (torch.Tensor) batch of ground_truth relative poses (between knn and query), a Nkx7 tensor
         :return: extended camera pose loss
         """
-        abs_pose_loss = self.camera_pose_loss(est_abs_poses, gt_abs_poses)
+        #TODO include absolute loss once sorting differetiability of spectral layer and handling quat-mat representations
+        #abs_pose_loss = self.camera_pose_loss(est_abs_poses, gt_abs_poses)
         rel_pose_loss = self.camera_pose_loss(est_rel_poses, gt_rel_poses)
 
-        return (1-self.w)*abs_pose_loss + self.w*rel_pose_loss
+        #return (1-self.w)*abs_pose_loss + self.w*rel_pose_loss
+        return rel_pose_loss
 
 
 class CameraPoseLoss(nn.Module):

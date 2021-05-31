@@ -1,7 +1,8 @@
 import numpy as np
+import transforms3d as t3d
 
 
-def calc_relative_rot_mat(rot_mat1, rot_mat2):
+def calc_rel_rot_mat(rot_mat1, rot_mat2):
     """
     Calculates the relative rotation matrix
     """
@@ -16,3 +17,8 @@ def calc_rel_trans(trans1, trans2):
     """
     rel_trans_12 = trans1 - trans2
     return rel_trans_12
+
+
+def quat_to_mat(q):
+    return t3d.quaternions.quat2mat(q / np.linalg.norm(q))
+

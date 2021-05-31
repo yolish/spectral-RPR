@@ -15,15 +15,6 @@ import transforms3d as t3d
 # algo related utilities
 #######################
 
-
-def build_rel_matrix(camera_poses, indices, k):
-    # K X K  X 7 matrix with relative poses a set of cameras
-    knn_rel_poses = np.zeros((k, k, 7))
-    for i, index0 in enumerate(indices):
-        for j, index1 in enumerate(indices):
-            knn_rel_poses[i, j, :] = rel_pose(camera_poses[index0], camera_poses[index1])
-    return knn_rel_poses
-
 def fetch_knn(query, db, k):
     """
     Fetch the indices of the k nearest neighbors in the given dataset's embedding based on the L2 distance
@@ -34,26 +25,6 @@ def fetch_knn(query, db, k):
     """
     distances = torch.norm(db - query, dim=1)
     return np.argsort(distances.cpu().numpy())[:k]
-
-
-def rel_pose(target_pose, query_pose):
-    """
-    Calculate the relative pose from target to query
-    Returns the translation and rotation (quaternion representation)
-    """
-    # t_target + delta_t = t_query
-    # delta_r = t_query - t_target
-    delta_t = query_pose[:3] - target_pose[:3]
-
-    # r_target*delta_r = r_query
-    # delta_r = inv(r_target)*r_query
-    target_quat = target_pose[3:]
-    query_quat = query_pose[3:]
-    target_rot_m = t3d.quaternions.quat2mat(target_quat / np.linalg.norm(target_quat))
-    query_rot_m = t3d.quaternions.quat2mat(query_quat / np.linalg.norm(target_quat))
-    delta_rot = np.dot(np.linalg.inv(target_rot_m), query_rot_m)
-    delta_quat = t3d.quaternions.mat2quat(delta_rot)
-    return delta_t, delta_quat
 
 # Logging and output utils
 ##########################
@@ -127,7 +98,8 @@ def plot_loss_func(sample_count, loss_vals, loss_fig_path):
     plt.ylabel('Loss')
     plt.savefig(loss_fig_path)
 
-# Augmentations
+# Augmentations utils
+#######################
 train_transforms = {
     'baseline': transforms.Compose([transforms.ToPILImage(),
                                     transforms.Resize(256),

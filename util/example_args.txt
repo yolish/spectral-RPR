@@ -1,1 +1,6 @@
-spectral-rpr train /home/maintenance/spectral-rpr-main/models/backbones/efficient-net-b0.pth /mnt/data/CambridgeLandmarks/CAMBRIDGE_dataset/ /home/maintenance/spectral-rpr-main/datasets/CambridgeLandmarks/abs_cambridge_pose_sorted.csv_ShopFacade_train.csv 
+spectral-rpr
+train
+models/backbones/efficient-net-b0.pth
+/mnt/data/CambridgeLandmarks/CAMBRIDGE_dataset/
+datasets/CambridgeLandmarks/abs_cambridge_pose_sorted.csv_ShopFacade_train.csv
+datasets/CambridgeLandmarks/cambridge_four_scenes.csv_poselab_netvlad_embedding_ShopFacade.pth

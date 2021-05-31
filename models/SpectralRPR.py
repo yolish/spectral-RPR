@@ -1,7 +1,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
-
+import transforms3d as t3d
+import numpy as np
+from util import spectral_sync_utils
 
 class Backbone(nn.Module):
 
@@ -67,14 +69,45 @@ class SpectralRPR(nn.Module):
     def forward_regressor_heads(self, latent_query, latent_knns):
         latent_pairs = torch.cat((latent_query, latent_knns), 1)
         rel_ts = self.regressor_t(latent_pairs)
-        rel_rots = self.regressor_rot(latent_pairs)
-        return rel_ts, rel_rots
+        rel_quats = self.regressor_rot(latent_pairs)
+        return rel_ts, rel_quats
 
-    def forward_spectral(self, rel_knn_ts, rel_knn_rots, rel_query_ts, rel_query_rots, batch_size):
-        # Place holder until we add here the actual code
-        abs_t = torch.ones((batch_size, 3)).to(rel_knn_ts.device)
-        abs_rot = torch.ones((batch_size, 4)).to(rel_knn_rots.device)
-        return abs_t, abs_rot
+
+    @torch.no_grad()
+    def forward_spectral(self, exp_rel_knn_ts, rel_knn_rots,
+                                                exp_abs_knn_ts, abs_knn_rots,
+                                                rel_query_ts, rel_query_quats):
+        # rel_knn_ts = N X 3K X 3K (exponent of relative translation between K neighbors)
+        # rel_knn_rots = N x 3K x 3K (relative rotation between K neighbors)
+        # rel_query_ts / quats - N x 3 / 4 (relative k to query)
+        device = exp_abs_knn_ts.device
+        my_dtype = exp_abs_knn_ts.type
+        batch_size = exp_abs_knn_ts.shape[0]
+        k = rel_query_ts.shape[0]//batch_size
+
+        # Move everything to cpu and numpy
+        exp_rel_knn_ts = exp_rel_knn_ts.cpu().numpy()
+        rel_knn_rots = rel_knn_rots.cpu().numpy()
+        exp_abs_knn_ts = exp_abs_knn_ts.cpu().numpy()
+        abs_knn_rots = abs_knn_rots.cpu().numpy()
+        rel_query_ts = rel_query_ts.cpu().numpy()
+        rel_query_quats = rel_query_quats.cpu().numpy()
+
+        # Prepare data structures
+        abs_ts = np.zeros((batch_size, 3))
+        abs_quats = np.zeros((batch_size, 4))
+        # Loop and do:
+        for i in range(batch_size):
+            rel_trans_mat = spectral_sync_utils.compose_exp_rel_trans_mat(rel_query_ts[i*k:(i+1)*k, :],exp_rel_knn_ts[i, :, :])
+            abs_t, _ = spectral_sync_utils.spectral_sync_trans(rel_trans_mat, exp_abs_knn_ts)
+            abs_ts[i, :] = abs_t
+
+            rel_rot_mat = spectral_sync_utils.compose_rel_rot_mat(rel_query_quats[i * k:(i + 1) * k, :],
+                                                                  rel_knn_rots[i, :, :])
+            abs_rot, _ = spectral_sync_utils.spectral_sync_rot(rel_rot_mat, abs_knn_rots)
+            abs_quats[i, :] = t3d.quaternion.mat2quat(abs_rot)
+
+        return torch.tensor(abs_ts).to(device).to(my_dtype), torch.tensor(abs_quats).to(device).to(my_dtype)
 
     def forward(self, data):
         query = data['img'] # N x C X H X W
@@ -93,17 +126,21 @@ class SpectralRPR(nn.Module):
         # Regress relative poses between query and knns
         # N*K X H (repeat each query for K times)
         latent_query = latent_query.repeat(1, k).reshape(batch_size*k, latent_query.shape[1])
-        rel_query_ts, rel_query_rots = self.forward_regressor_heads(latent_query, latent_knns)
+        rel_query_ts, rel_query_quats = self.forward_regressor_heads(latent_query, latent_knns)
         ###########################3###################
 
         # Apply spectral synchornization
-        rel_knn_poses = data['knn_rel_poses']
-        rel_knn_ts = rel_knn_poses[:, :, :, :3]
-        rel_knn_rots = rel_knn_poses[:, :, :, 3:]
-        abs_t, abs_rot = self.forward_spectral(rel_knn_ts, rel_knn_rots, rel_query_ts, rel_query_rots, batch_size)
+        exp_rel_knn_ts = data["exp_rel_knn_ts"]
+        rel_knn_rots = data["rel_knn_rots"]
+        exp_abs_knn_ts = data["exp_abs_knn_ts"]
+        abs_knn_rots = data["abs_knn_rots"]
 
-        res = {"abs_poses": torch.cat((abs_t, abs_rot), dim=1),
-               "rel_poses": torch.cat((rel_query_ts, rel_query_rots), dim=1)}
+        abs_t, abs_quat = self.forward_spectral(exp_rel_knn_ts, rel_knn_rots,
+                                                exp_abs_knn_ts, abs_knn_rots,
+                                                rel_query_ts, rel_query_quats)
+
+        res = {"abs_poses": torch.cat((abs_t, abs_quat), dim=1),
+               "rel_poses": torch.cat((rel_query_ts, rel_query_quats), dim=1)}
         return res
 
 
