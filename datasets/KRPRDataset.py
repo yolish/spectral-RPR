@@ -4,7 +4,10 @@ import torch
 import numpy as np
 import pandas as pd
 from os.path import join
-from util.utils import fetch_knn, rel_pose, build_rel_matrix
+from util.pose_utils import quat_to_mat, calc_rel_rot_mat, calc_rel_trans
+from util.utils import fetch_knn
+from util.spectral_sync_utils import calc_relative_poses, decompose_poses_with_exp
+import transforms3d as t3d
 
 
 class KRPRDataset(Dataset):
@@ -20,7 +23,7 @@ class KRPRDataset(Dataset):
         :param embedding_path (str) path to an embedding of the dataset
         :param k: (int) number of neighbors
         :param data_transform: (Transform object) a torchvision transform object
-        :return: an instance of the class
+        :return: an instance of' the class
         """
         # compute k-nearest neighbors by pos
         super(KRPRDataset, self).__init__()
@@ -47,22 +50,37 @@ class KRPRDataset(Dataset):
         # Load image of k nearest neighbors and their poses
         knn_indices = self.knn[idx]
         knn_imgs = []
-        # K X 7 with relative poses from knn to query
+
+        # Compute K x 7 relative poses from Knn to query
         knn_query_rel_poses = np.zeros((self.k, 7))
+        t1 = pose[:3]
+        rot_mat1 = quat_to_mat(pose[3:])
         for i, knn_index in enumerate(knn_indices):
             knn_imgs.append(imread(self.img_paths[knn_index]))
-            delta_t, delta_quat = rel_pose(self.poses[knn_index], self.poses[idx])
-            knn_query_rel_poses[i, :3] = delta_t
-            knn_query_rel_poses[i, 3:] = delta_quat
+            t2 = self.poses[knn_index][:3]
+            rot_mat2 = quat_to_mat(self.poses[knn_index][3:])
+            knn_query_rel_poses[i, :3] = calc_rel_trans(t1, t2) # relative transtio
+            knn_query_rel_poses[i, 3:] = t3d.quaternions.mat2quat(calc_rel_rot_mat(rot_mat1, rot_mat2))
+
+            # Apply the same transformation on
             if self.transform:
                 knn_imgs[i] = self.transform(knn_imgs[i])
 
-        # K X K  X 7 matrix with relative poses between knn
-        knn_rel_poses = build_rel_matrix(self.poses, knn_indices, self.k)
+        # Compute the relative poses between KNN
+        knn_poses = self.poses[knn_indices, :]
+        exp_rel_knn_ts, rel_knn_rots = calc_relative_poses(knn_poses)
 
-        sample = {'img': img, 'pose': pose,
+        # Decompose absolute KNN poses
+        exp_abs_knn_ts, abs_knn_rots = decompose_poses_with_exp(self.poses)
+
+        sample = {'img': img,
+                  'pose': pose,
                   'knn_imgs': torch.stack(knn_imgs),
-                  'knn_query_rel_poses': knn_query_rel_poses, 'knn_rel_poses': knn_rel_poses}
+                  'exp_abs_knn_ts': exp_abs_knn_ts,
+                  'abs_knn_rots': abs_knn_rots,
+                  'knn_query_rel_poses': knn_query_rel_poses,
+                  'exp_rel_knn_ts': exp_rel_knn_ts,
+                  'rel_knn_rots': rel_knn_rots}
         return sample
 
 
