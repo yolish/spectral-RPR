@@ -3,14 +3,15 @@ import torch.nn.functional as F
 import torch
 import transforms3d as t3d
 import numpy as np
-from util import spectral_sync_utils
+from util import spectral_sync_utils, utils
+import torchvision
 
 class Backbone(nn.Module):
 
     def __init__(self, config):
         super(Backbone, self).__init__()
+        self.encoder = torch.load(config["backbone"])
         self.output_dim = 1280 # EfficientNet
-        self.backbone = torch.load(config["backbone"])
         self.avg_pooling_2d = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, img):
@@ -19,38 +20,10 @@ class Backbone(nn.Module):
         :param img: input image (N X C X H X W)
         :return: (torch.Tensor) (N x
         """
-        x = self.backbone.extract_features(img)
+        x = self.encoder.extract_features(img)
         x = self.avg_pooling_2d(x)
         x = x.flatten(start_dim=1)
         return x
-
-
-class PoseRegressor(nn.Module):
-    """ A simple MLP to regress a pose component"""
-
-    def __init__(self, input_dim, output_dim):
-        """
-        input_dim: (int) the input dimension
-        output_dim: (int) the outpur dimension
-        use_prior: (bool) whether to use prior information
-        """
-        super(PoseRegressor, self).__init__()
-        ch = 1024
-        self.fc_h = nn.Linear(input_dim, ch)
-        self.fc_o = nn.Linear(ch, output_dim)
-        self._reset_parameters()
-
-    def _reset_parameters(self):
-        for p in self.parameters():
-            if p.dim() > 1:
-                nn.init.xavier_uniform_(p)
-
-    def forward(self, x):
-        """
-        Forward pass
-        """
-        x = F.gelu(self.fc_h(x))
-        return self.fc_o(x)
 
 
 class SpectralRPR(nn.Module):
@@ -59,15 +32,26 @@ class SpectralRPR(nn.Module):
     """
     def __init__(self, config):
         super(SpectralRPR, self).__init__()
+        output_dim = 1280 # EfficientNet
+        self.fc_h = nn.Linear(output_dim*2, output_dim)
+        self.regressor_t = nn.Linear(output_dim, 3)
+        self.regressor_rot = nn.Linear(output_dim, 4)
+        self._reset_parameters()
+        self.dropout = nn.Dropout(config.get("dropout"))
+        # Create the backbone
         self.backbone = Backbone(config)
-        self.regressor_t = PoseRegressor(self.backbone.output_dim*2, 3)
-        self.regressor_rot = PoseRegressor(self.backbone.output_dim*2, 4)
+
+    def _reset_parameters(self):
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
 
     def forward_backbone(self, img):
         return self.backbone(img)
 
     def forward_regressor_heads(self, latent_query, latent_knns):
         latent_pairs = torch.cat((latent_query, latent_knns), 1)
+        latent_pairs = self.dropout(F.relu(self.fc_h(latent_pairs)))
         rel_ts = self.regressor_t(latent_pairs)
         rel_quats = self.regressor_rot(latent_pairs)
         return rel_ts, rel_quats
@@ -109,7 +93,7 @@ class SpectralRPR(nn.Module):
 
         return torch.tensor(abs_ts).to(device).to(my_dtype), torch.tensor(abs_quats).to(device).to(my_dtype)
 
-    def forward(self, data):
+    def forward(self, data, apply_spectral=False):
         query = data['img'] # N x C X H X W
         knns = data['knn_imgs'] # N x K X C X H X W
         batch_size = query.shape[0] # N
@@ -127,21 +111,25 @@ class SpectralRPR(nn.Module):
         # N*K X H (repeat each query for K times)
         latent_query = latent_query.repeat(1, k).reshape(batch_size*k, latent_query.shape[1])
         rel_query_ts, rel_query_quats = self.forward_regressor_heads(latent_query, latent_knns)
-        ###########################3###################
 
-        # Apply spectral synchornization
-        exp_rel_knn_ts = data["exp_rel_knn_ts"]
-        rel_knn_rots = data["rel_knn_rots"]
-        exp_abs_knn_ts = data["exp_abs_knn_ts"]
-        abs_knn_rots = data["abs_knn_rots"]
+        abs_poses = None
+        if apply_spectral:
+            # Apply spectral synchornization
+            exp_rel_knn_ts = data["exp_rel_knn_ts"]
+            rel_knn_rots = data["rel_knn_rots"]
+            exp_abs_knn_ts = data["exp_abs_knn_ts"]
+            abs_knn_rots = data["abs_knn_rots"]
 
-        abs_t, abs_quat = self.forward_spectral(exp_rel_knn_ts, rel_knn_rots,
-                                                exp_abs_knn_ts, abs_knn_rots,
-                                                rel_query_ts, rel_query_quats)
+            abs_t, abs_quat = self.forward_spectral(exp_rel_knn_ts, rel_knn_rots,
+                                                    exp_abs_knn_ts, abs_knn_rots,
+                                                    rel_query_ts, rel_query_quats)
+            abs_poses = torch.cat((abs_t, abs_quat), dim=1)
 
-        res = {"abs_poses": torch.cat((abs_t, abs_quat), dim=1),
-               "rel_poses": torch.cat((rel_query_ts, rel_query_quats), dim=1)}
+        res = {"abs_poses": abs_poses, "rel_poses": torch.cat((rel_query_ts, rel_query_quats), dim=1)}
         return res
+
+
+
 
 
 
