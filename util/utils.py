@@ -10,10 +10,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch.nn.functional as F
 from torchvision import transforms
-import transforms3d as t3d
+import torch.nn as nn
+import copy
 
 # algo related utilities
 #######################
+def copy_modules(net, start_idx, end_idx):
+    """
+    :return: deep copy of the desired subnetwork (structure and parameters)
+    """
+    modules = list(net.children())[start_idx:end_idx]
+
+    # Copy the modules
+    sub_net = nn.Sequential(*modules)
+    params_orig = net.state_dict()
+    params_truncated = sub_net.state_dict()
+
+    # Copy the parameters
+    for name, param in params_orig.items():
+        if name in params_truncated:
+            params_truncated[name].data.copy_(param.data)
+
+    # Load parameters into the architecture
+    sub_net.load_state_dict(params_truncated)
+    return copy.deepcopy(sub_net)
+
 
 def fetch_knn(query, db, k):
     """
