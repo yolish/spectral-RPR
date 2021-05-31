@@ -6,20 +6,22 @@
 		"device_id": "cuda:0"
 	},
 	"spectral-rpr": {
-		"batch_size": 4,
+		"batch_size": 16,
 		"learnable": true,
 		"s_x": -3,
 		"s_q": -6.5,
 		"norm": 2,
-		"k": 10,
+		"k": 5,
 		"lr": 1e-4,
 		"weight_decay": 1e-5,
 		"eps": 1e-10,
 		"lr_scheduler_step_size": 100,
 		"lr_scheduler_gamma": 0.5,
 		"n_epochs": 500,
-		"output_dim": 1024,
-		"dropout": 0.2
+		"dropout": 0.2,
+		"apply_spectral": false,
+		"rel_to_abs_method": "spectral"
+
 	}
 	
 }
