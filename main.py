@@ -29,13 +29,14 @@ if __name__ == "__main__":
                             help="path to a file mapping images to their poses for the test dataset")
     arg_parser.add_argument("--checkpoint_path",
                             help="path to a pre-trained model (should match the model indicated in model_name")
+    arg_parser.add_argument("--res_output_path", help="path to output file with relative pose predictions")
     arg_parser.add_argument("--experiment", help="a short string to describe the experiment/commit used")
 
     args = arg_parser.parse_args()
     utils.init_logger()
 
     # Record execution details
-    logging.info("Start {} with {}".format(args.model_name, args.mode))
+    logging.info("Start {}ing with {}".format(args.mode, args.model_name))
     if args.experiment is not None:
         logging.info("Experiment details: {}".format(args.experiment))
     logging.info("Using dataset: {}".format(args.dataset_path))
@@ -64,6 +65,7 @@ if __name__ == "__main__":
     device = torch.device(device_id)
 
     # Create the model
+    # TODO support other model creation
     model = SpectralRPR(config).to(device)
     # Load the checkpoint if needed
     if args.checkpoint_path:
@@ -73,12 +75,17 @@ if __name__ == "__main__":
     if args.mode == 'train':
         train(model, config, device, args.dataset_path, args.train_labels_file, args.ir_train_dataset_embedding_path)
     else: # Test
-        stats = test(model, config, device, args.dataset_path, args.train_labels_file, args.test_labels_file,
-                     args.rpr_train_dataset_embedding_path, args.ir_train_dataset_embedding_path)
+        abs_stats, rel_stats = test(model, config, device, args.dataset_path, args.train_labels_file, args.test_labels_file,
+                     args.rpr_train_dataset_embedding_path, args.ir_train_dataset_embedding_path,
+                     res_output_file=args.res_output_path)
         # Record overall statistics
         logging.info("Performance of {} on {}".format(args.checkpoint_path, args.test_labels_file))
-        logging.info("Median pose error: {:.3f}[m], {:.3f}[deg]".format(np.median(stats[:, 0]), np.median(stats[:, 1])))
-        logging.info("Mean inference time:{:.2f}[ms]".format(np.mean(stats[:, 2])))
+        logging.info("Median pose error: {:.3f}[m], {:.3f}[deg]".format(np.median(abs_stats[:, 0]), np.median(abs_stats[:, 1])))
+        logging.info("Median relative pose error: {:.3f}[m], {:.3f}[deg]".format(np.median(rel_stats[:, 0]),
+                                                                                 np.median(rel_stats[:, 1])))
+        logging.info("Mean inference time:{:.2f}[ms]".format(np.mean(abs_stats[:, 2])))
+
+
 
 
 
