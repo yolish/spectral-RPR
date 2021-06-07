@@ -22,6 +22,7 @@ class CameraPoseDataset(Dataset):
         self.img_paths, self.poses, self.scenes, self.scenes_ids = read_labels_file(labels_file, dataset_path)
         self.dataset_size = self.poses.shape[0]
         self.transform = data_transform
+        self.dataset_path = dataset_path
 
     def __len__(self):
         return self.dataset_size
