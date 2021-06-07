@@ -1,3 +1,5 @@
+main.py
+------
 spectral-rpr
 train
 models/backbones/efficient-net-b0.pth
@@ -5,3 +7,30 @@ models/backbones/efficient-net-b0.pth
 datasets/CambridgeLandmarks/abs_cambridge_pose_sorted.csv_ShopFacade_train.csv
 --ir_train_dataset_embedding_path
 datasets/CambridgeLandmarks/cambridge_four_scenes.csv_poselab_netvlad_embedding_ShopFacade.pth
+
+main.py (test)
+------
+spectral-rpr
+test
+models/backbones/efficient-net-b0.pth
+/mnt/data/CambridgeLandmarks/CAMBRIDGE_dataset/
+datasets/CambridgeLandmarks/abs_cambridge_pose_sorted.csv_ShopFacade_train.csv
+--test_labels_file
+datasets/CambridgeLandmarks/abs_cambridge_pose_sorted.csv_ShopFacade_test.csv
+--checkpoint_path
+out/run_06_06_21_14_54_final.pth
+--ir_train_dataset_embedding_path
+datasets/CambridgeLandmarks/cambridge_four_scenes.csv_poselab_netvlad_embedding_ShopFacade.pth
+--rpr_train_dataset_embedding_path
+out/cambridge_four_scenes.csv_poselab_rpr_embedding_ShopFacade.pth
+--res_output_path
+rpr_results.csv
+
+encode_db.py
+-------
+spectral-rpr
+../models/backbones/efficient-net-b0.pth
+/mnt/data/CambridgeLandmarks/CAMBRIDGE_dataset/
+../datasets/CambridgeLandmarks/abs_cambridge_pose_sorted.csv_ShopFacade_train.csv
+../out/run_06_06_21_14_54_final.pth
+../out/cambridge_four_scenes.csv_poselab_rpr_embedding_ShopFacade.pth
