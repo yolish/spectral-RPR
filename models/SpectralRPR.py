@@ -6,6 +6,7 @@ import numpy as np
 from util import spectral_sync_utils, utils
 import torchvision
 
+
 class Backbone(nn.Module):
 
     def __init__(self, config):
@@ -41,6 +42,9 @@ class SpectralRPR(nn.Module):
         # Create the backbone
         self.backbone = Backbone(config)
 
+    def get_encoding_dim(self):
+        return self.backbone.output_dim
+
     def _reset_parameters(self):
         for p in self.parameters():
             if p.dim() > 1:
@@ -51,6 +55,7 @@ class SpectralRPR(nn.Module):
 
     def forward_regressor_heads(self, latent_query, latent_knns):
         latent_pairs = torch.cat((latent_query, latent_knns), 1)
+
         latent_pairs = self.dropout(F.relu(self.fc_h(latent_pairs)))
         rel_ts = self.regressor_t(latent_pairs)
         rel_quats = self.regressor_rot(latent_pairs)
@@ -60,14 +65,13 @@ class SpectralRPR(nn.Module):
     @torch.no_grad()
     def forward_spectral(self, exp_rel_knn_ts, rel_knn_rots,
                                                 exp_abs_knn_ts, abs_knn_rots,
-                                                rel_query_ts, rel_query_quats):
+                                                rel_query_ts, rel_query_quats, k):
         # rel_knn_ts = N X 3K X 3K (exponent of relative translation between K neighbors)
         # rel_knn_rots = N x 3K x 3K (relative rotation between K neighbors)
         # rel_query_ts / quats - N x 3 / 4 (relative k to query)
         device = exp_abs_knn_ts.device
         my_dtype = exp_abs_knn_ts.type
         batch_size = exp_abs_knn_ts.shape[0]
-        k = rel_query_ts.shape[0]//batch_size
 
         # Move everything to cpu and numpy
         exp_rel_knn_ts = exp_rel_knn_ts.cpu().numpy()
@@ -83,7 +87,7 @@ class SpectralRPR(nn.Module):
         # Loop and do:
         for i in range(batch_size):
             rel_trans_mat = spectral_sync_utils.compose_exp_rel_trans_mat(rel_query_ts[i*k:(i+1)*k, :],exp_rel_knn_ts[i, :, :])
-            abs_t, _ = spectral_sync_utils.spectral_sync_trans(rel_trans_mat, exp_abs_knn_ts)
+            abs_t, _ = spectral_sync_utils.spectral_sync_trans(rel_trans_mat, exp_abs_knn_ts[i, :, :])
             abs_ts[i, :] = abs_t
 
             rel_rot_mat = spectral_sync_utils.compose_rel_rot_mat(rel_query_quats[i * k:(i + 1) * k, :],
