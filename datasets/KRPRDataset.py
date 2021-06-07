@@ -59,7 +59,7 @@ class KRPRDataset(Dataset):
             knn_imgs.append(imread(self.img_paths[knn_index]))
             t2 = self.poses[knn_index][:3]
             rot_mat2 = quat_to_mat(self.poses[knn_index][3:])
-            knn_query_rel_poses[i, :3] = calc_rel_trans(t1, t2) # relative transtio
+            knn_query_rel_poses[i, :3] = calc_rel_trans(t1, t2) # relative translation
             knn_query_rel_poses[i, 3:] = t3d.quaternions.mat2quat(calc_rel_rot_mat(rot_mat1, rot_mat2))
 
             # Apply the same transformation on
