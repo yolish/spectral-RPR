@@ -70,7 +70,7 @@ class SpectralRPR(nn.Module):
         # rel_knn_rots = N x 3K x 3K (relative rotation between K neighbors)
         # rel_query_ts / quats - N x 3 / 4 (relative k to query)
         device = exp_abs_knn_ts.device
-        my_dtype = exp_abs_knn_ts.type
+        my_dtype = exp_abs_knn_ts.dtype
         batch_size = exp_abs_knn_ts.shape[0]
 
         # Move everything to cpu and numpy
@@ -92,8 +92,8 @@ class SpectralRPR(nn.Module):
 
             rel_rot_mat = spectral_sync_utils.compose_rel_rot_mat(rel_query_quats[i * k:(i + 1) * k, :],
                                                                   rel_knn_rots[i, :, :])
-            abs_rot, _ = spectral_sync_utils.spectral_sync_rot(rel_rot_mat, abs_knn_rots)
-            abs_quats[i, :] = t3d.quaternion.mat2quat(abs_rot)
+            abs_rot, _ = spectral_sync_utils.spectral_sync_rot(rel_rot_mat, abs_knn_rots[i])
+            abs_quats[i, :] = t3d.quaternions.mat2quat(abs_rot)
 
         return torch.tensor(abs_ts).to(device).to(my_dtype), torch.tensor(abs_quats).to(device).to(my_dtype)
 
